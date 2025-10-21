@@ -1,34 +1,61 @@
-const supabaseUrl = 'env.PROJECT_URL';
-const supabaseKey = 'env.PUBLIC_ANON_KEY';
-const supabase = Supabase.createClient(supabaseUrl, supabaseKey);
+// raw vanilla JS + supabase
 
-const form = document.getElementById('contactForm');
-const statusMsg = document.getElementById('statusMsg');
+// make sure you have these in your Vercel env
+// VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
 
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
+const supabaseUrl = import.meta.env ? import.meta.env.VITE_SUPABASE_URL : '';
+const supabaseKey = import.meta.env ? import.meta.env.VITE_SUPABASE_ANON_KEY : '';
 
-  const name = document.getElementById('name').value.trim();
-  const email = document.getElementById('email').value.trim();
-  const message = document.getElementById('message').value.trim();
+if (!supabaseUrl || !supabaseKey) {
+  console.error('Supabase URL or anon key missing in env!');
+}
 
-  if(!name || !email || !message){
-    statusMsg.textContent = "Fill all fields!";
-    statusMsg.style.color = 'red';
-    return;
-  }
+const supabase = supabase.createClient
+  ? supabase.createClient(supabaseUrl, supabaseKey)
+  : null;
 
-  const { data, error } = await supabase.from('contacts').insert([
-    { name, email, message }
-  ]);
+if (!supabase) {
+  console.error('Supabase client not initialized');
+}
 
-  if(error){
-    statusMsg.textContent = "Something went wrong!";
-    statusMsg.style.color = 'red';
-    console.error(error);
-  } else {
-    statusMsg.textContent = "Message sent! We'll get back to you soon.";
-    statusMsg.style.color = '#feaa7c';
-    form.reset();
-  }
-});
+// fallback: vanilla way without ESM (for normal HTML/JS)
+const script = document.createElement('script');
+script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/supabase.min.js';
+script.onload = () => initForm();
+document.body.appendChild(script);
+
+function initForm() {
+  const supabase = window.supabase.createClient(
+    supabaseUrl,
+    supabaseKey
+  );
+
+  const form = document.getElementById('contactForm');
+  const statusDiv = document.getElementById('status');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const formData = new FormData(form);
+    const name = formData.get('name');
+    const email = formData.get('email');
+    const message = formData.get('message');
+
+    if (!name || !email || !message) {
+      statusDiv.textContent = 'Please fill all fields';
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('contacts')
+      .insert([{ name, email, message }]);
+
+    if (error) {
+      console.error(error);
+      statusDiv.textContent = 'Error sending message 😬';
+    } else {
+      statusDiv.textContent = 'Message sent ✅';
+      form.reset();
+    }
+  });
+}
