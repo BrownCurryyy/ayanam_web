@@ -14,6 +14,7 @@ const rashis = [
 const nakSel = document.getElementById('nakshatra');
 const rashSel = document.getElementById('moonsign');
 const resultDiv = document.getElementById('result');
+const findBtn = document.getElementById('findBtn');
 
 // populate dropdowns
 nakshatras.forEach(n => {
@@ -22,6 +23,7 @@ nakshatras.forEach(n => {
   opt.textContent = n;
   nakSel.appendChild(opt);
 });
+
 rashis.forEach(r => {
   const opt = document.createElement('option');
   opt.value = r;
@@ -29,55 +31,74 @@ rashis.forEach(r => {
   rashSel.appendChild(opt);
 });
 
-// month → masas
-const monthToMasas = {
-  1: ["Pausha"], 2: ["Magha"], 3: ["Phalguna"], 4: ["Chaitra"], 5: ["Vaishakha"],
-  6: ["Ashadha"], 7: ["Ashadha","Shravana"], 8: ["Shravana"], 9: ["Bhadrapada"],
-  10:["Ashwayuja"], 11:["Kartika"], 12:["Margashira"]
-};
-
 // hide result initially
 resultDiv.classList.remove('show');
 
-document.getElementById('findBtn').addEventListener('click', async () => {
+// helper: parse dd/mm/yyyy properly
+function parseDMY(dateStr){
+  const [day, month, year] = dateStr.split('/').map(Number);
+  return new Date(year, month - 1, day); // month is 0-indexed
+}
+
+// mapping birth month → possible lunar months (maasa)
+const monthToMasas = {
+  1: ["Pausha"], 
+  2: ["Magha"], 
+  3: ["Phalguna"], 
+  4: ["Chaitra"], 
+  5: ["Vaishakha"],
+  6: ["Jyeshtha","Ashadha"], 
+  7: ["Ashadha","Shravana"], 
+  8: ["Shravana","Bhadrapada"], 
+  9: ["Bhadrapada","Ashwayuja"],
+  10:["Ashwayuja","Kartika"], 
+  11:["Kartika","Margashira"], 
+  12:["Margashira","Pausha"]
+};
+
+// main button click
+findBtn.addEventListener('click', async () => {
   const birthDateStr = document.getElementById('birthDate').value;
   const nakshatra = nakSel.value.trim();
   const moonsign = rashSel.value.trim();
 
-  if(!birthDateStr || !nakshatra || !moonsign) { alert('Please fill all fields'); return; }
+  if(!birthDateStr || !nakshatra || !moonsign){
+    alert('Please fill all fields');
+    return;
+  }
 
   const birthDate = new Date(birthDateStr);
-  const birthDay = birthDate.getDate();
   const birthMonth = birthDate.getMonth() + 1;
-  const masas = monthToMasas[birthMonth];
+  const targetMasas = monthToMasas[birthMonth] || [];
 
   try {
-    const data = await fetch('panchanga_2025.json').then(r=>r.json());
+    const data = await fetch('panchanga_2025.json').then(r => r.json());
 
+    // filter by nakshatra + moonsign + lunar month
     const matches = Object.entries(data).filter(([date, info]) =>
       info.Nakshatra.toLowerCase() === nakshatra.toLowerCase() &&
       info.Moonsign.toLowerCase() === moonsign.toLowerCase() &&
-      masas.some(m => info.Maasa.toLowerCase().includes(m.toLowerCase()))
+      targetMasas.some(m => info.Maasa.toLowerCase().includes(m.toLowerCase()))
     );
 
     if(matches.length === 0){
-      resultDiv.innerHTML = `<p>No matches found for ${nakshatra} (${moonsign}) in ${masas.join(', ')}.</p>`;
+      resultDiv.innerHTML = `<p>No matches found for ${nakshatra} (${moonsign}) in the same lunar month.</p>`;
       resultDiv.classList.add('show');
       return;
     }
 
-    // sort by closest day
+    // sort by truly nearest date
     matches.sort(([d1],[d2]) => {
-      const day1 = parseInt(d1.split('/')[0]);
-      const day2 = parseInt(d2.split('/')[0]);
-      return Math.abs(day1 - birthDay) - Math.abs(day2 - birthDay);
+      const date1 = parseDMY(d1);
+      const date2 = parseDMY(d2);
+      return Math.abs(date1 - birthDate) - Math.abs(date2 - birthDate);
     });
 
-    const [date, info] = matches[0];
+    const [nearestDate, info] = matches[0];
 
     resultDiv.innerHTML = `
-      <h3>Your Birthday is on</h3>
-      <h3>${date} → ${info.Tithi}, ${info.Nakshatra}, ${info.Moonsign}, ${info.Maasa}</h3>
+      <h3>Your Nearest Match is on</h3>
+      <h3>${nearestDate} → ${info.Tithi}, ${info.Nakshatra}, ${info.Moonsign}, ${info.Maasa}</h3>
     `;
     resultDiv.classList.add('show');
 
@@ -96,7 +117,6 @@ window.addEventListener('load', () => {
 // mobile nav toggle
 const menuToggle = document.getElementById('menuToggle');
 const navLinks = document.getElementById('navLinks');
-
 menuToggle.addEventListener('click', () => {
   menuToggle.classList.toggle('active');
   navLinks.classList.toggle('show');
